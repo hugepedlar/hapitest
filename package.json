@@ -1,0 +1,16 @@
+{
+  "name": "testapi",
+  "version": "1.0.0",
+  "description": "test api",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "hp",
+  "license": "ISC",
+  "dependencies": {
+    "hapi": "^8.4.0",
+    "hapi-auth-jwt2": "^4.3.2",
+    "jsonwebtoken": "^5.0.1"
+  }
+}
