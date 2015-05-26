@@ -1,6 +1,7 @@
 var Hapi = require('hapi');
 var jwt = require('jsonwebtoken');
 var couchbase = require('couchbase');
+var Boom = require('boom');
 
 var cluster = new couchbase.Cluster('couchbase://127.0.0.1');
 var bucket = cluster.openBucket('apiUsers', 'apiPass');
@@ -33,7 +34,7 @@ var validate = function (decoded, request, callback) {
 // Create a server with a host and port
 var server = new Hapi.Server();
 server.connection({ 
-    host: 'localhost', 
+    host: '0.0.0.0', 
     port: 8000,
 	routes: {cors: true} 
 });
@@ -61,19 +62,19 @@ server.route({
 		var success = false;
 		var authQuery = ViewQuery.from('user_accounts', 'list_users').key(request.payload.email);
 		bucket.query(authQuery, function (err, results) {
-			if (err) { console.log (err)}
+			if (err) { console.log (err);}
 			else {
 				console.log(results[0]);
-				if (results[0].value === request.payload.password) {
+				if (results[0] != undefined && results[0].value === request.payload.password) {
 					success = true;
 					var authToken = jwt.sign (
 						{email: results[0].key},
 						secretKey
 						);
-					reply({token: authToken});
+					reply({token: authToken, email: results[0].key});
 				}
 				else{
-					var error = Hapi.error.unauthorized('Wrong email or password');
+					var error = Boom.unauthorized('Wrong email or password');
 					reply(error);
 				}
 			}
