@@ -9,6 +9,7 @@
   "author": "hp",
   "license": "ISC",
   "dependencies": {
+    "bcrypt-nodejs": "0.0.3",
     "hapi": "^8.4.0",
     "hapi-auth-jwt2": "^4.3.2",
     "jsonwebtoken": "^5.0.1"
