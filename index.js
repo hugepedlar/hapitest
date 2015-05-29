@@ -3,12 +3,13 @@ var jwt = require('jsonwebtoken');
 var couchbase = require('couchbase');
 var Boom = require('boom');
 var bcrypt = require('bcrypt-nodejs');
-
-//var hash = bcrypt.hashSync("my password", bcrypt.genSaltSync(10));
+var smtpKey = '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';
+var sendgrid = require('sendgrid')(smtpKey);
 
 var cluster = new couchbase.Cluster('couchbase://127.0.0.1');
 var apiUsers = cluster.openBucket('apiUsers', 'apiPass');
 var ViewQuery = couchbase.ViewQuery;
+
 
 
 var secretKey = 'po3xzUXF7pZVLBkkvzec4B99HjMpqxroK9pGWiokO9Ilu2GsMPNpDrKnjtGVWyL';
@@ -34,6 +35,10 @@ var validate = function (decoded, request, callback) {
 	});
 	
 };
+
+function randomInt (low, high) {
+    return Math.floor(Math.random() * (high - low) + low);
+}
 
 // Create a server with a host and port
 var server = new Hapi.Server();
@@ -74,6 +79,7 @@ server.route({
 				console.log(result);
 				bcrypt.compare(request.payload.password, result.value.password, function (err, res) {
 					console.log(res);
+					// Is the password correct?
 					if (res == true) {
 						success = true;
 						var authToken = jwt.sign(
@@ -115,24 +121,34 @@ server.route({
 								if (err) { console.log(err); }
 								else {
 									// Store hash in DB.
+									var regCode = randomInt(1000, 9000);
+									var regToken = jwt.sign(
+										{ email: request.payload.email, registrationCode: regCode },
+										secretKey
+										);
 									apiUsers.insert(request.payload.email, {
 										firstName: request.payload.firstName,
 										lastName: request.payload.lastName,
 										password: hash,
-										type: 'userAccount'
+										type: 'userAccount',
+										accountStatus: 'unverified',
+										registrationCode: regCode
 									}, function (err, res) {
 											if (err) { reply(err); }
 											else {
-												var authToken = jwt.sign(
-													{ email: request.payload.email },
-													secretKey
-													);
-
-												var user = {};
-												user.email = request.payload.email;
-												user.firstName = request.payload.firstName;
-												user.lastName = request.payload.lastName;
-												reply({ token: authToken, user: user });
+												var email = new sendgrid.Email({
+													to: request.payload.email,
+													from: 'accounts@pedlar.com.au',
+													subject: request.payload.firstName + ', please confirm your account.',
+													text: 'Your registration code is: ' + regToken
+												});
+												sendgrid.send(email, function (err, res) {
+													if (err) { console.log(err); }
+													else {
+														console.log(res);
+														reply({ message: 'email sent' });
+													}
+												});
 											}
 										});
 								}
@@ -147,6 +163,51 @@ server.route({
 			}
 		});
 
+    }
+});
+
+server.route({
+    method: 'GET',
+    path: '/register/{regToken}',
+	config: { auth: false },
+    handler: function (request, reply) {
+		var decodedToken = jwt.decode(request.params.regToken);
+		console.log(decodedToken);
+		apiUsers.get(decodedToken.email, function (err, result) {
+			if (err) { console.log(err); reply(err);}
+			else {
+				console.log(result.value);
+				if (result.value.registrationCode === decodedToken.registrationCode) {
+					// registration code matches database
+					var user = result.value;
+					user.registrationCode = null;
+					user.accountStatus = 'verified';
+					apiUsers.replace(decodedToken.email, user, function(err, res) {
+						if (err) { console.log(err); reply(err);}
+						else {
+							var authToken = jwt.sign({email: user.email}, secretKey);
+							var userData = {};
+							userData.email = decodedToken.email;
+							userData.firstName = user.firstName;
+							userData.lastName = user.lastName;
+							
+							reply({token: authToken, user: userData});
+						}
+					});
+				}
+//				var authToken = jwt.sign(
+//					{ email: request.payload.email },
+//					secretKey
+//					);
+//
+//				var user = {};
+//				user.email = request.payload.email;
+//				user.firstName = request.payload.firstName;
+//				user.lastName = request.payload.lastName;
+//				
+//				reply({ token: authToken, user: user });
+			}
+		});
     }
 });
 
