@@ -92,7 +92,7 @@ server.route({
 
 server.route({
 	method: 'POST',
-	path: '/authenticate/reset',
+	path: '/authenticate/forgot',
 	config: { 
 		auth: false,
 		validate: {
@@ -101,7 +101,16 @@ server.route({
 			}
 		} 
 	},
-	handler: authRoutes.resetPassword
+	handler: authRoutes.forgotPassword
+});
+
+server.route({
+	method: 'GET',
+	path: '/authenticate/forgot/{resetToken}',
+	config: { 
+		auth: false
+	},
+	handler: authRoutes.forgotPasswordVerify
 });
 
 server.route({
