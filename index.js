@@ -1,5 +1,6 @@
 var Hapi = require('hapi');
 var jwt = require('jsonwebtoken');
+var hapiAuthJWT = require('hapi-auth-jwt2');
 var couchbase = require('couchbase');
 var Boom = require('boom');
 var bcrypt = require('bcrypt-nodejs');
@@ -63,7 +64,7 @@ server.connection({
 });
 
 // Register plugins
-server.register(require('hapi-auth-jwt2'), function (err) {
+server.register(hapiAuthJWT, function (err) {
 	
 	if (err){
 		console.log(err);

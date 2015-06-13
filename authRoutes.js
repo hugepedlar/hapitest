@@ -3,6 +3,7 @@
 module.exports = function (apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, randomInt) {
 	return {
 		authenticate: function (request, reply) {
+			console.log(request.info);
 			// Check db for submitted email address in login form
 			apiUsers.get(request.payload.email, function (err, result) {
 				if (err) {
@@ -22,18 +23,28 @@ module.exports = function (apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, ran
 							if (result.value.accountStatus === 'unverified') {
 								reply(Boom.unauthorized('Check your email for account verification'));
 							}
-							// Generate auth token and user account object
-							var authToken = jwt.sign(
-								{ email: request.payload.email },
-								secretKey
-								);
-
-							var user = {};
-							user.email = request.payload.email;
-							user.firstName = result.value.firstName;
-							user.lastName = result.value.lastName;
-							// Send auth token and user data to client
-							reply({ token: authToken, user: user });
+							else {
+								// Update db with login time
+								var userDbData = result.value;
+								userDbData.lastLoggedInAt = Math.floor((new Date).getTime()/1000);
+								apiUsers.replace(request.payload.email, userDbData, function (err, res) {
+									if (err) {console.log(err);}
+									else {console.log(res);}
+								});
+								
+								// Generate auth token and user account object
+								var authToken = jwt.sign(
+									{ email: request.payload.email },
+									secretKey
+									);
+	
+								var user = {};
+								user.email = request.payload.email;
+								user.firstName = result.value.firstName;
+								user.lastName = result.value.lastName;
+								// Send auth token and user data to client
+								reply({ token: authToken, user: user });
+							}
 						}
 						else {
 							// Password doesn't match
@@ -52,7 +63,7 @@ module.exports = function (apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, ran
 				if (err) {
 					// Email not found
 					console.log(err);
-					reply(err);
+					reply(Boom.notFound('Email address not found'));
 				}
 				else {
 					var user = result.value;
@@ -101,7 +112,7 @@ module.exports = function (apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, ran
 			apiUsers.get(decodedToken.email, function (err, result) {
 				if (err) {
 					console.log(err);
-					reply(Boom.unauthorized('Email address not found'));
+					reply(Boom.notFound('Email address not found'));
 				}
 				else {
 					// Does temp password from token match db temp password?
@@ -116,6 +127,7 @@ module.exports = function (apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, ran
 									else {
 										user.password = hash;
 										user.tempPassword = null;
+										// Update db
 										apiUsers.replace(decodedToken.email, user, function (err, res) {
 											if (err) {
 												console.log(err);
@@ -170,6 +182,7 @@ module.exports = function (apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, ran
 										apiUsers.insert(request.payload.email, {
 											firstName: request.payload.firstName,
 											lastName: request.payload.lastName,
+											registeredAt: Math.floor((new Date).getTime()/1000),
 											password: hash,
 											type: 'userAccount',
 											accountStatus: 'unverified',
@@ -222,6 +235,7 @@ module.exports = function (apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, ran
 						var user = result.value;
 						user.registrationCode = null;
 						user.accountStatus = 'verified';
+						user.verifiedAt = Math.floor((new Date).getTime()/1000);
 						// Update user account in db to verified
 						apiUsers.replace(decodedToken.email, user, function (err, res) {
 							if (err) { console.log(err); reply(err); }
