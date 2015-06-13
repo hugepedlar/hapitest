@@ -24,9 +24,10 @@ function randomInt (low, high) {
 
 var openRoutes = require('./openRoutes');
 var authRoutes = require('./authRoutes')(apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, randomInt);
+var restrictedRoutes = require('./restrictedRoutes')(apiUsers, Boom, bcrypt, jwt, sendgrid);
 
 var validate = function (decoded, request, callback) {
-	
+	//console.log(decoded.email);
 	// Try to retrieve user account record from db based on email field in auth token
 	var authQuery = ViewQuery.from('user_accounts', 'list_users').key(decoded.email);
 	apiUsers.query(authQuery, function (err, results) {
@@ -108,7 +109,12 @@ server.route({
 	method: 'GET',
 	path: '/authenticate/forgot/{resetToken}',
 	config: { 
-		auth: false
+		auth: false,
+		validate: {
+			params: {
+				resetToken: Joi.string()
+			}
+		}
 	},
 	handler: authRoutes.forgotPasswordVerify
 });
@@ -139,9 +145,26 @@ server.route({
 });
 
 server.route({
+    method: 'POST',
+    path:'/user/password',
+	config: {
+		auth: 'jwt',
+		validate: {
+			payload: {
+				email: Joi.string().email().required(),
+				oldPassword: Joi.required(),
+				password: Joi.string().min(2).required(),
+				passwordConfirm: Joi.string().min(2).required()
+			}
+		}
+	}, 
+    handler: restrictedRoutes.changePassword
+});
+
+server.route({
     method: 'GET',
     path:'/hello',
-	config: {auth: 'jwt'}, 
+	config: {auth: false}, 
     handler: openRoutes.hello
 });
 

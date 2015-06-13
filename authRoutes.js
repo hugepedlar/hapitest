@@ -58,7 +58,7 @@ module.exports = function (apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, ran
 					var user = result.value;
 					console.log(user);
 					// Generate temporary password
-					user.tempPassword = randomInt(1000000, 10000000);
+					user.tempPassword = "t" + randomInt(1000000, 10000000);
 					// Store temp password in db
 					apiUsers.replace(request.payload.email, user, function(err, res) {
 						if (err) {
@@ -101,27 +101,43 @@ module.exports = function (apiUsers, Boom, bcrypt, jwt, secretKey, sendgrid, ran
 			apiUsers.get(decodedToken.email, function (err, result) {
 				if (err) {
 					console.log(err);
-					reply(Boom.unauthorized('Email address not found')); 
+					reply(Boom.unauthorized('Email address not found'));
 				}
 				else {
 					// Does temp password from token match db temp password?
 					var user = result.value;
 					if (decodedToken.tempPassword === user.tempPassword) {
-						user.tempPassword = null;
-						apiUsers.replace(decodedToken.email, user, function(err, res) {
-							if (err) {
-								console.log(err);
-							}
+						// Replace user password with temp password
+						bcrypt.genSalt(10, function (err, salt) {
+							if (err) { console.log(err); }
 							else {
-								console.log(res);
+								bcrypt.hash(user.tempPassword, salt, null, function (err, hash) {
+									if (err) { console.log(err); }
+									else {
+										user.password = hash;
+										user.tempPassword = null;
+										apiUsers.replace(decodedToken.email, user, function (err, res) {
+											if (err) {
+												console.log(err);
+												reply(err);
+											}
+											else {
+												console.log(res);
+												var userData = {};
+												userData.email = decodedToken.email;
+												userData.firstName = user.firstName;
+												userData.lastName = user.lastName;
+												userData.tempPassword = decodedToken.tempPassword;
+												var authToken = jwt.sign({ email: userData.email }, secretKey);
+												reply({ token: authToken, user: userData });
+											}
+										});
+
+									}
+								});
 							}
 						});
-						var userData = {};
-						userData.email = user.email;
-						userData.firstName = user.firstName;
-						userData.lastName = user.lastName;
-						var authToken = jwt.sign( { email: user.email}, secretKey);
-						reply( { token: authToken, user: userData } );
+
 					}
 					else { reply(Boom.unauthorized('Temporary password doesn\'t match')); }
 				}
